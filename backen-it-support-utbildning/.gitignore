@@ -1,0 +1,25 @@
+﻿# ========== .NET / Visual Studio ==========
+bin/
+obj/
+*.user
+*.suo
+*.userosscache
+*.userprefs
+*.log
+*.vs/
+.vscode/
+.idea/
+
+# ========== OS-specifika filer ==========
+Thumbs.db
+.DS_Store
+
+# ========== Känsliga filer ==========
+appsettings.json
+appsettings.Development.json
+passwords.json
+testsecrets.json
+.env
+
+# ========== Node / Vite frontend ==========
+node_modules/

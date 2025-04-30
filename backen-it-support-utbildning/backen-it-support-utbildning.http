@@ -1,0 +1,6 @@
+@backen_it_support_utbildning_HostAddress = http://localhost:5223
+
+GET {{backen_it_support_utbildning_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
