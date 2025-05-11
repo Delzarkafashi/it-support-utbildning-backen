@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using backen_it_support_utbildning.Services;
 using backen_it_support_utbildning.Models;
+using MySql.Data.MySqlClient;
 
 namespace backen_it_support_utbildning.Services
 {
@@ -26,12 +27,14 @@ namespace backen_it_support_utbildning.Services
             var email = "delzar@gmail.com";
             var password = _config["AdminPassword"]!;
 
+
             var result = await _service.LoginWithUserInfo(email, password);
 
             Assert.NotNull(result);
             Assert.Equal(email, result.Email);
             Assert.Equal(1, result.AccessLevel);
         }
+
 
         [Fact]
         public async Task Login_WithValidTeamMemberCredentials_ReturnsTeamMember()

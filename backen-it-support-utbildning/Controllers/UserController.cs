@@ -42,5 +42,23 @@ namespace backen_it_support_utbildning.Controllers
 
             return Ok("Registrering lyckades.");
         }
+        [AllowAnonymous]
+        [HttpPost("login")]
+        public async Task<IActionResult> Login([FromBody] LoginDto dto)
+        {
+            try
+            {
+                var token = await _auth.Login(dto.Email, dto.Password);
+                if (token == null)
+                    return Unauthorized("Fel e-post eller lösenord.");
+
+                return Ok(new { token });
+            }
+            catch (AccountLockedException ex)
+            {
+                return StatusCode(423, ex.Message);
+            }
+        }
+
     }
 }

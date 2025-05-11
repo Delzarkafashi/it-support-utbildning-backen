@@ -9,6 +9,11 @@ using backen_it_support_utbildning.Models;
 
 namespace backen_it_support_utbildning.Services
 {
+    public class AccountLockedException : Exception
+    {
+        public AccountLockedException(string message) : base(message) { }
+    }
+
     public class AuthService
     {
         private readonly string _connectionString;
@@ -84,6 +89,24 @@ namespace backen_it_support_utbildning.Services
             using var connection = new MySqlConnection(_connectionString);
             await connection.OpenAsync();
 
+            // 🔒 Kontrollera om användaren är spärrad
+            var lockoutCmd = new MySqlCommand(
+                "SELECT attempts, lockout_until FROM login_attempts WHERE email = @Email",
+                connection
+            );
+            lockoutCmd.Parameters.AddWithValue("@Email", email);
+
+            using var lockoutReader = await lockoutCmd.ExecuteReaderAsync();
+            if (await lockoutReader.ReadAsync())
+            {
+                var lockoutUntil = lockoutReader["lockout_until"] as DateTime?;
+                if (lockoutUntil.HasValue && lockoutUntil.Value > DateTime.UtcNow)
+                {
+                    throw new AccountLockedException("Ditt konto är spärrat i 15 minuter efter för många misslyckade försök.");
+                }
+            }
+            await lockoutReader.DisposeAsync();
+
             var tables = new[] { "admins", "team_members", "users" };
 
             foreach (var table in tables)
@@ -101,17 +124,40 @@ namespace backen_it_support_utbildning.Services
 
                     if (BCrypt.Net.BCrypt.Verify(password, storedHash))
                     {
+                        var name = reader.GetString("name");
+                        var emailResult = reader.GetString("email");
+                        var accessLevel = reader.GetInt32("access_level");
+
+                        await reader.DisposeAsync();
+
+                        var clearCmd = new MySqlCommand("DELETE FROM login_attempts WHERE email = @Email", connection);
+                        clearCmd.Parameters.AddWithValue("@Email", email);
+                        await clearCmd.ExecuteNonQueryAsync();
+
                         return new UserDto
                         {
-                            Name = reader.GetString("name"),
-                            Email = reader.GetString("email"),
-                            AccessLevel = reader.GetInt32("access_level")
+                            Name = name,
+                            Email = emailResult,
+                            AccessLevel = accessLevel
                         };
                     }
                 }
 
                 await reader.DisposeAsync();
             }
+
+            // ❌ Misslyckad inloggning – logga försöket
+            var failCmd = new MySqlCommand(@"
+                INSERT INTO login_attempts (email, attempts, last_attempt, lockout_until)
+                VALUES (@Email, 1, NOW(), NULL)
+                ON DUPLICATE KEY UPDATE
+                    attempts = IF(last_attempt < DATE_SUB(NOW(), INTERVAL 15 MINUTE), 1, attempts + 1),
+                    last_attempt = NOW(),
+                    lockout_until = IF(attempts + 1 >= 3, DATE_ADD(NOW(), INTERVAL 15 MINUTE), NULL);",
+                connection
+            );
+            failCmd.Parameters.AddWithValue("@Email", email);
+            await failCmd.ExecuteNonQueryAsync();
 
             return null;
         }
