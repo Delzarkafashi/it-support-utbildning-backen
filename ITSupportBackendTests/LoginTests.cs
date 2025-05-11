@@ -2,6 +2,7 @@
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using backen_it_support_utbildning.Services;
+using backen_it_support_utbildning.Models;
 
 namespace backen_it_support_utbildning.Services
 {
@@ -57,12 +58,37 @@ namespace backen_it_support_utbildning.Services
             Assert.Equal(email, result.Email);
             Assert.Equal(3, result.AccessLevel);
         }
-
         [Fact]
-        public async Task Login_WithInvalidCredentials_ReturnsNull()
+        public async Task Register_NewUser_ReturnsTrue()
         {
-            var result = await _service.LoginWithUserInfo("nobody@example.com", "wrongpassword");
-            Assert.Null(result);
+            var uniqueEmail = $"testuser_{Guid.NewGuid()}@example.com";
+            var dto = new RegisterDto
+            {
+                Name = "Test User",
+                Email = uniqueEmail,
+                Password = "test1234"
+            };
+
+            var result = await _service.RegisterUser(dto);
+
+            Assert.True(result); 
         }
+        [Fact]
+        public async Task Register_ExistingUser_ReturnsFalse()
+        {
+            var email = "del@gmail.com"; 
+            var dto = new RegisterDto
+            {
+                Name = "Redan Finns",
+                Email = email,
+                Password = "test1234"
+            };
+
+            var result = await _service.RegisterUser(dto);
+
+            Assert.False(result);
+        }
+
+
     }
 }

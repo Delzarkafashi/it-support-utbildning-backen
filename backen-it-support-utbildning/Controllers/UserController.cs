@@ -1,6 +1,8 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
+using backen_it_support_utbildning.Services;
+using backen_it_support_utbildning.Models;
 
 namespace backen_it_support_utbildning.Controllers
 {
@@ -8,6 +10,13 @@ namespace backen_it_support_utbildning.Controllers
     [Route("api/[controller]")]
     public class UserController : ControllerBase
     {
+        private readonly AuthService _auth;
+
+        public UserController()
+        {
+            _auth = new AuthService();
+        }
+
         [Authorize]
         [HttpGet("me")]
         public IActionResult GetMe()
@@ -15,13 +24,23 @@ namespace backen_it_support_utbildning.Controllers
             var email = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email)?.Value;
             var role = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Role)?.Value;
 
-
             return Ok(new
             {
                 message = "Du är inloggad!",
                 email,
                 role
             });
+        }
+
+        [AllowAnonymous]
+        [HttpPost("register")]
+        public async Task<IActionResult> Register([FromBody] RegisterDto dto)
+        {
+            var success = await _auth.RegisterUser(dto);
+            if (!success)
+                return BadRequest("E-post finns redan.");
+
+            return Ok("Registrering lyckades.");
         }
     }
 }
