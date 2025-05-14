@@ -54,11 +54,12 @@ namespace backen_it_support_utbildning.Controllers
 
                 return Ok(new { token });
             }
-            catch (AccountLockedException ex)
+            catch (Exception)
             {
-                return StatusCode(423, ex.Message);
+                return StatusCode(500, "Ett fel uppstod på servern.");
             }
         }
+
 
     }
 }

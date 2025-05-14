@@ -5,11 +5,13 @@ using System.Threading.Tasks;
 
 namespace backen_it_support_utbildning.Controllers
 {
+
     [ApiController]
     [Route("api/[controller]")]
     public class TeamController : ControllerBase
     {
         private readonly IConfiguration _configuration;
+
 
         public TeamController(IConfiguration configuration)
         {
@@ -53,5 +55,6 @@ namespace backen_it_support_utbildning.Controllers
                 return Problem($"Fel vid hämtning: {ex.Message}");
             }
         }
+
     }
 }

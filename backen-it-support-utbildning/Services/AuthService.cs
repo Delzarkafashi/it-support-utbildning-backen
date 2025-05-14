@@ -4,16 +4,11 @@ using System.Security.Claims;
 using System.Text;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.Extensions.Configuration;
-using System.Data;
 using backen_it_support_utbildning.Models;
+using System.Data;
 
 namespace backen_it_support_utbildning.Services
 {
-    public class AccountLockedException : Exception
-    {
-        public AccountLockedException(string message) : base(message) { }
-    }
-
     public class AuthService
     {
         private readonly string _connectionString;
@@ -45,12 +40,13 @@ namespace backen_it_support_utbildning.Services
             var hash = BCrypt.Net.BCrypt.HashPassword(dto.Password);
 
             var insertCmd = new MySqlCommand(
-                "INSERT INTO users (name, email, password_hash, access_level) VALUES (@Name, @Email, @Hash, 3)",
+                "INSERT INTO users (name, email, password_hash, access_level, category) VALUES (@Name, @Email, @Hash, 3, @Category)",
                 connection
             );
             insertCmd.Parameters.AddWithValue("@Name", dto.Name);
             insertCmd.Parameters.AddWithValue("@Email", dto.Email);
             insertCmd.Parameters.AddWithValue("@Hash", hash);
+            insertCmd.Parameters.AddWithValue("@Category", dto.Category ?? "");
             await insertCmd.ExecuteNonQueryAsync();
 
             return true;
@@ -69,7 +65,8 @@ namespace backen_it_support_utbildning.Services
             {
                 new Claim("name", user.Name),
                 new Claim("email", user.Email),
-                new Claim("role", user.AccessLevel.ToString()),
+                new Claim("access_level", user.AccessLevel.ToString()),
+                new Claim("category", user.Category ?? ""),
                 new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
             };
 
@@ -89,32 +86,15 @@ namespace backen_it_support_utbildning.Services
             using var connection = new MySqlConnection(_connectionString);
             await connection.OpenAsync();
 
-            // 🔒 Kontrollera om användaren är spärrad
-            var lockoutCmd = new MySqlCommand(
-                "SELECT attempts, lockout_until FROM login_attempts WHERE email = @Email",
-                connection
-            );
-            lockoutCmd.Parameters.AddWithValue("@Email", email);
-
-            using var lockoutReader = await lockoutCmd.ExecuteReaderAsync();
-            if (await lockoutReader.ReadAsync())
-            {
-                var lockoutUntil = lockoutReader["lockout_until"] as DateTime?;
-                if (lockoutUntil.HasValue && lockoutUntil.Value > DateTime.UtcNow)
-                {
-                    throw new AccountLockedException("Ditt konto är spärrat i 15 minuter efter för många misslyckade försök.");
-                }
-            }
-            await lockoutReader.DisposeAsync();
-
             var tables = new[] { "admins", "team_members", "users" };
 
             foreach (var table in tables)
             {
-                var cmd = new MySqlCommand(
-                    $"SELECT name, email, password_hash, access_level FROM {table} WHERE email = @email",
-                    connection
-                );
+                string query = table == "users"
+                    ? $"SELECT name, email, password_hash, access_level, category FROM {table} WHERE email = @email"
+                    : $"SELECT name, email, password_hash, access_level FROM {table} WHERE email = @email";
+
+                var cmd = new MySqlCommand(query, connection);
                 cmd.Parameters.AddWithValue("@email", email);
 
                 using var reader = await cmd.ExecuteReaderAsync();
@@ -127,37 +107,18 @@ namespace backen_it_support_utbildning.Services
                         var name = reader.GetString("name");
                         var emailResult = reader.GetString("email");
                         var accessLevel = reader.GetInt32("access_level");
-
-                        await reader.DisposeAsync();
-
-                        var clearCmd = new MySqlCommand("DELETE FROM login_attempts WHERE email = @Email", connection);
-                        clearCmd.Parameters.AddWithValue("@Email", email);
-                        await clearCmd.ExecuteNonQueryAsync();
+                        var category = table == "users" ? reader["category"]?.ToString() ?? "" : "";
 
                         return new UserDto
                         {
                             Name = name,
                             Email = emailResult,
-                            AccessLevel = accessLevel
+                            AccessLevel = accessLevel,
+                            Category = category
                         };
                     }
                 }
-
-                await reader.DisposeAsync();
             }
-
-            // ❌ Misslyckad inloggning – logga försöket
-            var failCmd = new MySqlCommand(@"
-                INSERT INTO login_attempts (email, attempts, last_attempt, lockout_until)
-                VALUES (@Email, 1, NOW(), NULL)
-                ON DUPLICATE KEY UPDATE
-                    attempts = IF(last_attempt < DATE_SUB(NOW(), INTERVAL 15 MINUTE), 1, attempts + 1),
-                    last_attempt = NOW(),
-                    lockout_until = IF(attempts + 1 >= 3, DATE_ADD(NOW(), INTERVAL 15 MINUTE), NULL);",
-                connection
-            );
-            failCmd.Parameters.AddWithValue("@Email", email);
-            await failCmd.ExecuteNonQueryAsync();
 
             return null;
         }
@@ -168,5 +129,6 @@ namespace backen_it_support_utbildning.Services
         public string Name { get; set; } = string.Empty;
         public string Email { get; set; } = string.Empty;
         public int AccessLevel { get; set; }
+        public string Category { get; set; } = string.Empty;
     }
 }

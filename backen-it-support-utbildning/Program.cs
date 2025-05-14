@@ -16,13 +16,12 @@ namespace backen_it_support_utbildning
             {
                 options.AddPolicy("AllowFrontend", policy =>
                 {
-                    policy.WithOrigins("http://localhost:5173")
+                    policy.WithOrigins("http://localhost:5173", "https://localhost:5173")
                           .AllowAnyHeader()
                           .AllowAnyMethod();
                 });
             });
 
-            // 🔐 JWT Auth
             builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 .AddJwtBearer(options =>
                 {
@@ -38,12 +37,10 @@ namespace backen_it_support_utbildning
                             Encoding.UTF8.GetBytes("din_super_hemliga_nyckel_som_måste_va_minst_32_tecken"))
                     };
                 });
-
             builder.Services.AddScoped<AuthService>();
+            builder.Services.AddScoped<QuizService>();
 
             builder.Services.AddControllers();
-
-            // 📘 Swagger med JWT
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen(c =>
             {
@@ -76,6 +73,7 @@ namespace backen_it_support_utbildning
 
             var app = builder.Build();
 
+
             if (app.Environment.IsDevelopment())
             {
                 app.UseSwagger();
@@ -85,7 +83,7 @@ namespace backen_it_support_utbildning
             app.UseHttpsRedirection();
             app.UseCors("AllowFrontend");
 
-            app.UseAuthentication(); // Viktigt!
+            app.UseAuthentication(); 
             app.UseAuthorization();
 
             app.MapControllers();
