@@ -60,17 +60,61 @@ namespace backen_it_support_utbildning.Controllers
         {
             try
             {
+                using var connection = new MySqlConnection(_connectionString);
+                await connection.OpenAsync();
+
+                var lockCheck = new MySqlCommand("SELECT lockout_until FROM login_attempts WHERE email = @Email", connection);
+                lockCheck.Parameters.AddWithValue("@Email", dto.Email);
+                var lockedUntilObj = await lockCheck.ExecuteScalarAsync();
+
+                if (lockedUntilObj != null && lockedUntilObj != DBNull.Value)
+                {
+                    return Unauthorized(new { message = "⛔ Konto låst. Kontakta admin." });
+                }
+
                 var token = await _auth.Login(dto.Email, dto.Password);
+
                 if (token == null)
-                    return Unauthorized("Fel e-post eller lösenord.");
+                {
+                    var updateCmd = new MySqlCommand(@"
+                INSERT INTO login_attempts (email, attempts, last_attempt)
+                VALUES (@Email, 1, NOW())
+                ON DUPLICATE KEY UPDATE
+                    attempts = attempts + 1,
+                    last_attempt = NOW()", connection);
+
+                    updateCmd.Parameters.AddWithValue("@Email", dto.Email);
+                    await updateCmd.ExecuteNonQueryAsync();
+
+                    var checkCmd = new MySqlCommand("SELECT attempts FROM login_attempts WHERE email = @Email", connection);
+                    checkCmd.Parameters.AddWithValue("@Email", dto.Email);
+                    var attempts = Convert.ToInt32(await checkCmd.ExecuteScalarAsync());
+
+                    if (attempts >= 5)
+                    {
+                        var lockCmd = new MySqlCommand("UPDATE login_attempts SET lockout_until = NOW() WHERE email = @Email", connection);
+                        lockCmd.Parameters.AddWithValue("@Email", dto.Email);
+                        await lockCmd.ExecuteNonQueryAsync();
+
+                        return Unauthorized(new { message = "⛔ Konto har låsts efter 5 misslyckade försök." });
+                    }
+
+                    return Unauthorized(new { message = "❌ Fel e-post eller lösenord." });
+                }
+
+                var clearCmd = new MySqlCommand("DELETE FROM login_attempts WHERE email = @Email", connection);
+                clearCmd.Parameters.AddWithValue("@Email", dto.Email);
+                await clearCmd.ExecuteNonQueryAsync();
 
                 return Ok(new { token });
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                return StatusCode(500, "Ett fel uppstod på servern.");
+                return StatusCode(500, new { message = $"❌ Serverfel: {ex.Message}" });
             }
         }
+
+
 
         [Authorize(Roles = "Admin")]
         [HttpGet]
