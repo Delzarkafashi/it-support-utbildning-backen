@@ -67,8 +67,11 @@ namespace backen_it_support_utbildning.Services
                 new Claim("email", user.Email),
                 new Claim("access_level", user.AccessLevel.ToString()),
                 new Claim("category", user.Category ?? ""),
+                new Claim(ClaimTypes.Role, user.AccessLevel == 1 ? "Admin" :
+                                        user.AccessLevel == 2 ? "Team" : "User"),
                 new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
             };
+
 
             var token = new JwtSecurityToken(
                 issuer: _jwtIssuer,
